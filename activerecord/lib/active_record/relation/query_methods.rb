@@ -968,7 +968,21 @@ module ActiveRecord
     #   # Returns 1 record per distinct name
     #
     #   User.select(:name).distinct.distinct(false)
-    #   # You can also remove the uniqueness
+    #   # To remove the uniqueness expression.
+    #
+    # Passing an attribute, or an array of attributes to distinct is
+    # supported, and will produce a DISTINCT ON query for those database
+    # that support it, such as PostgreSQL.
+    #
+    # To return one comment per post, without controlling which comment:
+    #
+    #   Comment.distinct(:post_id)
+    #   # SELECT DISTINCT ON ("comments"."post_id") "comments"."*" FROM "comments"
+    #
+    # To return the latest comment on all posts:
+    #
+    #   Comment.distinct(:post_id).order(:post_id, created_at: :desc)
+    #   # SELECT DISTINCT ON ("comments"."post_id") "comments"."*" FROM "comments" ORDER BY "comments"."post_id", "comments"."created_at" DESC
     def distinct(value = true)
       spawn.distinct!(value)
     end
@@ -1199,7 +1213,7 @@ module ActiveRecord
         build_select(arel)
 
         arel.optimizer_hints(*optimizer_hints_values) unless optimizer_hints_values.empty?
-        arel.distinct(distinct_value)
+        build_distinct(arel) if distinct_value
         arel.from(build_from) unless from_clause.empty?
         arel.lock(lock_value) if lock_value
 
@@ -1237,6 +1251,15 @@ module ActiveRecord
           opts.arel.as(name.to_s)
         else
           opts
+        end
+      end
+
+      def build_distinct(arel)
+        case distinct_value
+        when true, false
+          arel.distinct(distinct_value)
+        else
+          arel.distinct_on(*arel_columns(Array(distinct_value)))
         end
       end
 
